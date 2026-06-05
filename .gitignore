@@ -1,0 +1,6 @@
+.memory/
+web/node_modules/
+video/node_modules/
+*.log
+.env
+.env.local

@@ -1,0 +1,167 @@
+/* ==========================================================================
+   YACHTMAX EXPERIENCE SYSTEM™ — DESIGN SYSTEM vNEXT (BEYOND LUXURY)
+   Core Design System stylesheet containing color variables, typography,
+   elevations, glassmorphism 2.0, and layout configurations.
+   ========================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Inter:wght@100..900&family=IBM+Plex+Mono:wght@100..700&display=swap');
+
+:root {
+  /* --- Colors System --- */
+  --color-midnight-ocean: #07111C;
+  --color-abyss-blue: #0D2236;
+  --color-deep-horizon: #18344E;
+  --color-champagne-metal: #C7A97E;
+  --color-sandstone: #D8CCB8;
+  --color-pearl-white: #FAF8F4;
+  --color-graphite: #1D1D1D;
+  --color-ocean-mist: #EAE6DF;
+  
+  /* --- Accent System --- */
+  --color-aurora-gold: #E3C48A;
+  --color-titanium-silver: #B8BEC5;
+  --color-marine-copper: #A77B52;
+
+  /* --- Spacing Scale (8px Space Unit) --- */
+  --space-1: 8px;
+  --space-2: 16px;
+  --space-3: 24px;
+  --space-4: 32px;
+  --space-5: 48px;
+  --space-6: 64px;
+  --space-7: 96px;
+  --space-8: 128px;
+  --space-9: 192px;
+  --space-10: 256px;
+
+  /* --- Borders Radius --- */
+  --radius-sharp: 4px;
+  --radius-soft: 12px;
+  --radius-premium: 20px;
+  --radius-organic: 32px;
+  --radius-infinite: 999px;
+
+  /* --- Motion System (Transitions) --- */
+  --duration-fast: 200ms;
+  --duration-normal: 400ms;
+  --duration-slow: 800ms;
+  --duration-cinematic: 1200ms;
+
+  --ease-water-drift: cubic-bezier(0.25, 1, 0.5, 1);
+  --ease-tidal-reveal: cubic-bezier(0.76, 0, 0.24, 1);
+}
+
+/* --- Base Layout --- */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: var(--color-midnight-ocean);
+  color: var(--color-pearl-white);
+  font-family: 'Inter', -apple-system, sans-serif;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* --- Typography System --- */
+h1, h2, h3, .font-editorial {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+}
+
+.text-mono {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 13px;
+  letter-spacing: 0.05em;
+  color: var(--color-titanium-silver);
+}
+
+/* --- Elevations (Surfaces) --- */
+.surface-1 { box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4); }
+.surface-2 { box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5); }
+.surface-3 { box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6); }
+.surface-4 { box-shadow: 0 40px 80px rgba(0, 0, 0, 0.7); }
+.surface-5 { box-shadow: 0 80px 140px rgba(0, 0, 0, 0.8); }
+
+/* --- Glassmorphism 2.0 --- */
+.glass-panel {
+  background: rgba(13, 34, 54, 0.72);
+  backdrop-filter: blur(30px);
+  -webkit-backdrop-filter: blur(30px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-premium);
+}
+
+/* --- Custom Containers --- */
+.container-premium {
+  max-width: 1600px;
+  margin: 0 auto;
+  padding: 0 var(--space-4);
+  width: 100%;
+}
+
+/* --- Interactive Elements & Luxury Hovers --- */
+.btn-yachtmax {
+  background: transparent;
+  border: 1px solid var(--color-champagne-metal);
+  color: var(--color-pearl-white);
+  cursor: pointer;
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  padding: var(--space-2) var(--space-4);
+  text-transform: uppercase;
+  transition: all var(--duration-normal) var(--ease-water-drift);
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-yachtmax::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(199, 169, 126, 0.2),
+    transparent
+  );
+  transition: all var(--duration-slow) var(--ease-water-drift);
+}
+
+.btn-yachtmax:hover::before {
+  left: 100%;
+}
+
+.btn-yachtmax:hover {
+  background: var(--color-champagne-metal);
+  color: var(--color-midnight-ocean);
+  box-shadow: 0 0 15px rgba(199, 169, 126, 0.4);
+}
+
+/* --- Scrollbar Customization (Silent Luxury) --- */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-midnight-ocean);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-deep-horizon);
+  border-radius: var(--radius-infinite);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-champagne-metal);
+}
