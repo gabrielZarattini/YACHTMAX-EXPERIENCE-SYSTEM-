@@ -1,7 +1,16 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import * as THREE from 'three';
+import LeadCaptureModal from './LeadCaptureModal';
+import {
+  initAnalytics,
+  trackScrollDepth,
+  trackSlideEnter,
+  trackSlideLeave,
+  trackHotspotClick,
+  trackCTAClick
+} from '../services/analytics';
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -85,23 +94,60 @@ export default function CinematicScroller() {
   const estabilizadoresLineRef = useRef(null);
   const balconiesLineRef = useRef(null);
 
-  const hotspotRefs = {
+  const hotspotRefs = useMemo(() => ({
     proa: proaDotRef,
     cabine: cabineDotRef,
     estabilizadores: estabilizadoresDotRef,
     balconies: balconiesDotRef
-  };
+  }), []);
 
-  const svgLineRefs = {
+  const svgLineRefs = useMemo(() => ({
     proa: proaLineRef,
     cabine: cabineLineRef,
     estabilizadores: estabilizadoresLineRef,
     balconies: balconiesLineRef
-  };
+  }), []);
 
   // State variables for mobile-first rendering
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [activeHotspot, setActiveHotspot] = useState('proa');
+
+  // Active section state for navbar and sidebar tracking
+  const [activeSection, setActiveSection] = useState('alliance'); // 'alliance' | 'specs' | 'contact'
+  const activeSectionRef = useRef('alliance');
+
+  // Lead modal and Zoom state variables
+  const [showLeadModal, setShowLeadModal] = useState(false);
+  const [leadModalType, setLeadModalType] = useState('broker'); // 'broker' | 'cafe'
+  const [isZoomed, setIsZoomed] = useState(false);
+
+  // Custom smooth scroll helper without ScrollToPlugin
+  const scrollToSection = (progress) => {
+    const trigger = ScrollTrigger.getAll()[0];
+    if (trigger) {
+      const start = trigger.start;
+      const end = trigger.end;
+      const targetScroll = start + (end - start) * progress;
+      
+      const scrollObj = { y: window.scrollY };
+      gsap.killTweensOf(scrollObj);
+      gsap.to(scrollObj, {
+        y: targetScroll,
+        duration: 1.2,
+        ease: 'power2.inOut',
+        onUpdate: () => {
+          window.scrollTo(0, scrollObj.y);
+        }
+      });
+    }
+  };
+
+  // Zoom and camera target refs
+  const isZoomedRef = useRef(false);
+  const cameraTargetRef = useRef(new THREE.Vector3(0, 0, 0));
+  const triggerZoomRef = useRef(null);
+  const triggerZoomBackRef = useRef(null);
+  const scrollProgressRef = useRef(0);
 
   useEffect(() => {
     const checkMobile = () => {
@@ -112,6 +158,9 @@ export default function CinematicScroller() {
   }, []);
 
   useEffect(() => {
+    // Initialize Scroll Depth Analytics Engine
+    initAnalytics();
+
     // -------------------------------------------------------------
     // 1. WebGL Three.js Setup (Abstract Yacht Sculpture)
     // -------------------------------------------------------------
@@ -133,6 +182,42 @@ export default function CinematicScroller() {
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
+    // Enable ACES Filmic Tone Mapping + sRGB Output
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.25;
+
+    // Generate PMREM procedural environment map
+    const pmremGenerator = new THREE.PMREMGenerator(renderer);
+    pmremGenerator.compileEquirectangularShader();
+
+    const envScene = new THREE.Scene();
+    envScene.background = new THREE.Color('#07111c');
+
+    const envHemiLight = new THREE.HemisphereLight(0x0d2236, 0xc7a97e, 1.5);
+    envScene.add(envHemiLight);
+
+    const envOverheadGeo = new THREE.BoxGeometry(10, 0.5, 10);
+    const envOverheadMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+    const envOverhead = new THREE.Mesh(envOverheadGeo, envOverheadMat);
+    envOverhead.position.set(0, 8, 0);
+    envScene.add(envOverhead);
+
+    const envWarmGeo = new THREE.SphereGeometry(3, 16, 16);
+    const envWarmMat = new THREE.MeshBasicMaterial({ color: 0xc7a97e });
+    const envWarm = new THREE.Mesh(envWarmGeo, envWarmMat);
+    envWarm.position.set(6, 2, 5);
+    envScene.add(envWarm);
+
+    const envCoolGeo = new THREE.SphereGeometry(3, 16, 16);
+    const envCoolMat = new THREE.MeshBasicMaterial({ color: 0x18344e });
+    const envCool = new THREE.Mesh(envCoolGeo, envCoolMat);
+    envCool.position.set(-6, 2, -5);
+    envScene.add(envCool);
+
+    const envTarget = pmremGenerator.fromScene(envScene);
+    scene.environment = envTarget.texture;
+    pmremGenerator.dispose();
+
     // Lights
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
     scene.add(ambientLight);
@@ -145,26 +230,41 @@ export default function CinematicScroller() {
     directionalLight2.position.set(-5, 3, 2);
     scene.add(directionalLight2);
 
-    // Create a Group to hold the sculpture elements
-    const yachtSculpture = new THREE.Group();
+    // Warm PointLight for golden hour fill (stern popa)
+    const warmBounceLight = new THREE.PointLight(0xffb070, 3.5, 10);
+    warmBounceLight.position.set(1.5, -0.2, -1.5);
+    scene.add(warmBounceLight);
 
-    // Material 1: Polished Gold
+    // Create Rig Group (for scroll tweens) and Child Group (for wave sways)
+    const sculptureRig = new THREE.Group();
+    const yachtSculpture = new THREE.Group();
+    sculptureRig.add(yachtSculpture);
+
+    // Material 1: Polished Gold Refined
     const goldMaterial = new THREE.MeshPhysicalMaterial({
       color: 0xc7a97e,
-      roughness: 0.1,
-      metalness: 0.9,
-      clearcoat: 1.0,
-      clearcoatRoughness: 0.1,
-      reflectivity: 1.0
-    });
-
-    // Material 2: Polished Platinum/Chrome
-    const chromeMaterial = new THREE.MeshPhysicalMaterial({
-      color: 0xeae6df,
       roughness: 0.08,
       metalness: 0.95,
       clearcoat: 1.0,
-      reflectivity: 1.0
+      clearcoatRoughness: 0.04,
+      reflectivity: 1.0,
+      envMapIntensity: 1.5,
+      sheen: 0.4,
+      sheenColor: new THREE.Color(0xffd700),
+      sheenRoughness: 0.1
+    });
+
+    // Material 2: Polished Platinum/Chrome Refined
+    const chromeMaterial = new THREE.MeshPhysicalMaterial({
+      color: 0xeae6df,
+      roughness: 0.05,
+      metalness: 1.0,
+      clearcoat: 1.0,
+      clearcoatRoughness: 0.02,
+      reflectivity: 1.0,
+      envMapIntensity: 2.0,
+      iridescence: 0.4,
+      iridescenceIOR: 1.3
     });
 
     // Material 3: Carbon Fiber / Matte Black
@@ -205,6 +305,53 @@ export default function CinematicScroller() {
     hullMesh.rotation.x = Math.PI / 2; // Lie flat
     hullMesh.position.y = -0.15;
     yachtSculpture.add(hullMesh);
+
+    // A.1 Teak/Carbon Deck Plate
+    const deckPlateShape = new THREE.Shape();
+    deckPlateShape.moveTo(0, 1.25);
+    deckPlateShape.quadraticCurveTo(0.26, 0.38, 0.21, -1.15);
+    deckPlateShape.lineTo(-0.21, -1.15);
+    deckPlateShape.quadraticCurveTo(-0.26, 0.38, 0, 1.25);
+
+    const deckPlateGeo = new THREE.ExtrudeGeometry(deckPlateShape, {
+      steps: 1,
+      depth: 0.015,
+      bevelEnabled: false
+    });
+    const deckPlateMat = new THREE.MeshPhysicalMaterial({
+      color: 0x1a1a1a, // Dark slate teak/carbon
+      roughness: 0.65,
+      metalness: 0.2,
+      clearcoat: 0.1
+    });
+    const deckPlate = new THREE.Mesh(deckPlateGeo, deckPlateMat);
+    deckPlate.rotation.x = Math.PI / 2;
+    deckPlate.position.y = 0.02; // slightly above hull top
+    yachtSculpture.add(deckPlate);
+
+    // A.2 Symmetrical Side Railings (Chrome rods along deck edge)
+    const railingGeo = new THREE.CylinderGeometry(0.005, 0.005, 1.9, 8);
+    const leftRailing = new THREE.Mesh(railingGeo, chromeMaterial);
+    leftRailing.position.set(-0.22, 0.04, 0.05);
+    leftRailing.rotation.x = Math.PI / 2;
+    yachtSculpture.add(leftRailing);
+
+    const rightRailing = new THREE.Mesh(railingGeo, chromeMaterial);
+    rightRailing.position.set(0.22, 0.04, 0.05);
+    rightRailing.rotation.x = Math.PI / 2;
+    yachtSculpture.add(rightRailing);
+
+    // A.3 Tilted Mast & Radar Dome (Stern popa)
+    const mastGeo = new THREE.CylinderGeometry(0.008, 0.014, 0.35, 8);
+    const mastMesh = new THREE.Mesh(mastGeo, chromeMaterial);
+    mastMesh.position.set(0, 0.12, -0.85);
+    mastMesh.rotation.x = -Math.PI / 6; // tilted back
+    yachtSculpture.add(mastMesh);
+
+    const domeGeo = new THREE.CylinderGeometry(0.05, 0.05, 0.025, 16);
+    const domeMesh = new THREE.Mesh(domeGeo, carbonMaterial);
+    domeMesh.position.set(0, 0.28, -0.92);
+    yachtSculpture.add(domeMesh);
 
     // B. Balconies (Fold-out side platforms - signature OKEAN design)
     const balconyGeo = new THREE.BoxGeometry(0.12, 0.02, 0.45);
@@ -308,7 +455,142 @@ export default function CinematicScroller() {
       markers.push({ id: data.id, mesh: sphereMesh, ring: ringMesh });
     });
 
-    scene.add(yachtSculpture);
+    // Shiny, reflective ocean surface disk (stays flat, scales with rig)
+    const diskGeo = new THREE.RingGeometry(0, 3, 64);
+    const diskMat = new THREE.MeshPhysicalMaterial({
+      color: 0x07111c,
+      roughness: 0.12,
+      metalness: 0.9,
+      clearcoat: 1.0,
+      clearcoatRoughness: 0.08,
+      transparent: true,
+      opacity: 0.75,
+      side: THREE.DoubleSide
+    });
+    const diskMesh = new THREE.Mesh(diskGeo, diskMat);
+    diskMesh.rotation.x = -Math.PI / 2;
+    diskMesh.position.y = -0.55;
+    sculptureRig.add(diskMesh);
+
+    // Waving digital ocean wireframe grid (fades towards edges via vertex colors)
+    const gridSegments = 40;
+    const gridGeom = new THREE.PlaneGeometry(8, 8, gridSegments, gridSegments);
+    
+    // Add vertex colors for fading out towards boundaries
+    const gridColors = [];
+    const gridPosAttr = gridGeom.attributes.position;
+    for (let i = 0; i < gridPosAttr.count; i++) {
+      const gx = gridPosAttr.getX(i);
+      const gy = gridPosAttr.getY(i);
+      const dist = Math.sqrt(gx * gx + gy * gy);
+      // fade out color values based on distance from center (max radius 3.8)
+      const alpha = Math.max(0, 1 - dist / 3.8);
+      const baseColor = new THREE.Color(0xc7a97e); // Champagne Gold accent
+      gridColors.push(baseColor.r * alpha, baseColor.g * alpha, baseColor.b * alpha);
+    }
+    gridGeom.setAttribute('color', new THREE.Float32BufferAttribute(gridColors, 3));
+
+    const gridMat = new THREE.MeshBasicMaterial({
+      vertexColors: true,
+      wireframe: true,
+      transparent: true,
+      opacity: 0.35,
+      side: THREE.DoubleSide,
+      depthWrite: false
+    });
+    const gridMesh = new THREE.Mesh(gridGeom, gridMat);
+    gridMesh.rotation.x = -Math.PI / 2;
+    gridMesh.position.y = -0.53; // Slightly above disk
+    sculptureRig.add(gridMesh);
+
+    // Volumetric sunbeam (semi-transparent open-ended cone) representing sun flare
+    const coneGeo = new THREE.ConeGeometry(1.8, 5.5, 32, 1, true);
+    const coneMat = new THREE.MeshBasicMaterial({
+      color: 0xc7a97e, // Champagne gold beam
+      transparent: true,
+      opacity: 0.05,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
+      depthWrite: false
+    });
+    const sunbeam = new THREE.Mesh(coneGeo, coneMat);
+    // Point it down and forward onto the boat
+    sunbeam.position.set(1.5, 2.0, -0.5);
+    sunbeam.rotation.z = -Math.PI / 5;
+    sculptureRig.add(sunbeam);
+
+    // Background golden glow aura sprite
+    const canvasGlow = document.createElement('canvas');
+    canvasGlow.width = 128;
+    canvasGlow.height = 128;
+    const ctxGlow = canvasGlow.getContext('2d');
+    const gradGlow = ctxGlow.createRadialGradient(64, 64, 0, 64, 64, 64);
+    gradGlow.addColorStop(0, 'rgba(199, 169, 126, 0.22)'); // warm champagne
+    gradGlow.addColorStop(0.5, 'rgba(199, 169, 126, 0.08)');
+    gradGlow.addColorStop(1, 'rgba(199, 169, 126, 0)');
+    ctxGlow.fillStyle = gradGlow;
+    ctxGlow.fillRect(0, 0, 128, 128);
+
+    const glowTexture = new THREE.CanvasTexture(canvasGlow);
+    const glowMaterial = new THREE.SpriteMaterial({
+      map: glowTexture,
+      blending: THREE.AdditiveBlending,
+      transparent: true,
+      opacity: 0.75
+    });
+    const glowSprite = new THREE.Sprite(glowMaterial);
+    glowSprite.position.set(0, 0, -1.2);
+    glowSprite.scale.set(4.5, 4.5, 1);
+    sculptureRig.add(glowSprite);
+
+    scene.add(sculptureRig);
+
+    // I. Sparkle Particle Field (Champagne Dust)
+    const particleCount = 180;
+    const particleGeometry = new THREE.BufferGeometry();
+    const particlePositions = new Float32Array(particleCount * 3);
+    const particleSpeeds = [];
+
+    for (let i = 0; i < particleCount; i++) {
+      particlePositions[i * 3] = (Math.random() - 0.5) * 8; // X
+      particlePositions[i * 3 + 1] = (Math.random() - 0.5) * 4; // Y
+      particlePositions[i * 3 + 2] = (Math.random() - 0.5) * 6; // Z
+      
+      particleSpeeds.push({
+        x: (Math.random() - 0.5) * 0.0015,
+        y: Math.random() * 0.002 + 0.001, // upward drift
+        z: (Math.random() - 0.5) * 0.0015,
+        phase: Math.random() * Math.PI * 2
+      });
+    }
+
+    particleGeometry.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
+
+    // Create a beautiful round glow particle texture procedurally
+    const canvasParticle = document.createElement('canvas');
+    canvasParticle.width = 16;
+    canvasParticle.height = 16;
+    const ctx = canvasParticle.getContext('2d');
+    const grad = ctx.createRadialGradient(8, 8, 0, 8, 8, 8);
+    grad.addColorStop(0, 'rgba(255, 235, 180, 1)'); // bright warm white/gold
+    grad.addColorStop(0.3, 'rgba(199, 169, 126, 0.6)'); // champagne
+    grad.addColorStop(1, 'rgba(199, 169, 126, 0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, 16, 16);
+
+    const particleTexture = new THREE.CanvasTexture(canvasParticle);
+
+    const particleMaterial = new THREE.PointsMaterial({
+      size: 0.15,
+      map: particleTexture,
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      opacity: 0.85
+    });
+
+    const particles = new THREE.Points(particleGeometry, particleMaterial);
+    scene.add(particles);
 
     // -------------------------------------------------------------
     // Responsive Layout & Viewport Adapters
@@ -317,25 +599,24 @@ export default function CinematicScroller() {
 
     const adjustLayout = () => {
       const w = window.innerWidth;
-      const h = window.innerHeight;
       
       isMob = w < 768;
       const isTab = w >= 768 && w < 1024;
       
       if (isMob) {
         // Mobile layout: model shifted upwards, scaled down
-        yachtSculpture.position.set(0, 0.35, 0);
-        yachtSculpture.scale.setScalar(0.7);
+        sculptureRig.position.set(0, 0.35, 0);
+        sculptureRig.scale.setScalar(0.7);
         camera.position.set(0, 0, 4.3);
       } else if (isTab) {
         // Tablet layout: centered, slightly scaled down
-        yachtSculpture.position.set(0, 0.1, 0);
-        yachtSculpture.scale.setScalar(0.85);
+        sculptureRig.position.set(0, 0.1, 0);
+        sculptureRig.scale.setScalar(0.85);
         camera.position.set(0, 0, 3.8);
       } else {
         // Desktop layout: shifted right to make space for left side text
-        yachtSculpture.position.set(0.5, -0.05, 0);
-        yachtSculpture.scale.setScalar(0.95);
+        sculptureRig.position.set(0.5, -0.05, 0);
+        sculptureRig.scale.setScalar(0.95);
         camera.position.set(0, 0, 3.3);
       }
     };
@@ -346,6 +627,9 @@ export default function CinematicScroller() {
     // -------------------------------------------------------------
     // 2. GSAP ScrollTrigger & Scroll-Teller Animation
     // -------------------------------------------------------------
+    let activeSlide = 'panel1';
+    trackSlideEnter('panel1');
+
     const tl = gsap.timeline({
       scrollTrigger: {
         trigger: containerRef.current,
@@ -353,7 +637,45 @@ export default function CinematicScroller() {
         end: 'bottom bottom',
         scrub: 1.2,
         pin: true,
-        anticipatePin: 1
+        anticipatePin: 1,
+        onUpdate: (self) => {
+          const progress = self.progress;
+          scrollProgressRef.current = progress;
+
+          // Scroll depth milestones tracking
+          const progressPct = Math.round(progress * 100);
+          if (progressPct >= 25) trackScrollDepth(25);
+          if (progressPct >= 50) trackScrollDepth(50);
+          if (progressPct >= 75) trackScrollDepth(75);
+          if (progressPct >= 100) trackScrollDepth(100);
+
+          // Slide timings enter/leave tracking
+          let currentSlide = 'panel1';
+          if (progress >= 0.2 && progress < 1.0) {
+            currentSlide = 'panel2';
+          } else if (progress >= 1.0) {
+            currentSlide = 'panel3';
+          }
+
+          if (currentSlide !== activeSlide) {
+            trackSlideLeave(activeSlide);
+            trackSlideEnter(currentSlide);
+            activeSlide = currentSlide;
+          }
+
+          // Active Section React State Tracking
+          let section = 'alliance';
+          if (progress >= 0.25 && progress < 0.8) {
+            section = 'specs';
+          } else if (progress >= 0.8) {
+            section = 'contact';
+          }
+
+          if (section !== activeSectionRef.current) {
+            activeSectionRef.current = section;
+            setActiveSection(section);
+          }
+        }
       }
     });
 
@@ -385,9 +707,9 @@ export default function CinematicScroller() {
     tl.to(hudRef.current, { opacity: 1, scale: 1, pointerEvents: 'auto', ease: 'power2.inOut' }, 0.3);
     tl.to(hotspotsContainerRef.current, { opacity: 1, pointerEvents: 'auto', ease: 'power2.inOut' }, 0.3);
 
-    // Camera move & Sculpture Rotation
+    // Camera move & Rig Rotation
     tl.to(camera.position, { x: 0, y: 0, z: 3.2, ease: 'power2.inOut' }, 0);
-    tl.to(yachtSculpture.rotation, { y: Math.PI / 3, x: Math.PI / 8, ease: 'power2.inOut' }, 0);
+    tl.to(sculptureRig.rotation, { y: Math.PI / 3, x: Math.PI / 8, ease: 'power2.inOut' }, 0);
 
     // --- TIMELINE STEP 2: Slide 2 -> Slide 3 (Bottom) ---
     // Background crossfade (BG2 -> BG3)
@@ -409,20 +731,168 @@ export default function CinematicScroller() {
 
     // Camera Center & Model Spin
     tl.to(camera.position, { x: 0, z: 3.0, ease: 'power2.inOut' }, 1);
-    tl.to(yachtSculpture.rotation, { y: Math.PI * 2.3, x: Math.PI / 5, ease: 'power2.inOut' }, 1);
+    tl.to(sculptureRig.rotation, { y: Math.PI * 2.3, x: Math.PI / 5, ease: 'power2.inOut' }, 1);
+
+    // --- Camera Target & Zoom Tweens ---
+    const savedCameraPos = new THREE.Vector3();
+    const cameraTarget = new THREE.Vector3(0, 0, 0);
+    cameraTargetRef.current = cameraTarget;
+
+    triggerZoomRef.current = (markerId) => {
+      const marker = markers.find(m => m.id === markerId);
+      if (!marker) return;
+
+      // Track click in analytics
+      trackHotspotClick(markerId);
+
+      // Save pre-zoom camera position
+      if (!isZoomedRef.current) {
+        savedCameraPos.copy(camera.position);
+        isZoomedRef.current = true;
+        setIsZoomed(true);
+        document.body.style.overflow = 'hidden';
+      }
+
+      // Calculate world coordinates of the marker
+      const targetWorldPos = new THREE.Vector3();
+      marker.mesh.getWorldPosition(targetWorldPos);
+
+      // Calculate target camera position (0.8 units offset along target line)
+      const direction = new THREE.Vector3().subVectors(camera.position, targetWorldPos).normalize();
+      const targetCamPos = targetWorldPos.clone().addScaledVector(direction, 0.8);
+
+      // Kill any active camera tweens
+      gsap.killTweensOf(camera.position);
+      gsap.killTweensOf(cameraTarget);
+
+      // Tween to zoom
+      gsap.to(camera.position, {
+        x: targetCamPos.x,
+        y: targetCamPos.y,
+        z: targetCamPos.z,
+        duration: 1.2,
+        ease: 'power2.inOut'
+      });
+
+      gsap.to(cameraTarget, {
+        x: targetWorldPos.x,
+        y: targetWorldPos.y,
+        z: targetWorldPos.z,
+        duration: 1.2,
+        ease: 'power2.inOut'
+      });
+    };
+
+    triggerZoomBackRef.current = () => {
+      if (!isZoomedRef.current) return;
+
+      gsap.killTweensOf(camera.position);
+      gsap.killTweensOf(cameraTarget);
+
+      gsap.to(camera.position, {
+        x: savedCameraPos.x,
+        y: savedCameraPos.y,
+        z: savedCameraPos.z,
+        duration: 1.2,
+        ease: 'power2.inOut',
+        onComplete: () => {
+          isZoomedRef.current = false;
+          setIsZoomed(false);
+          document.body.style.overflow = '';
+        }
+      });
+
+      gsap.to(cameraTarget, {
+        x: 0,
+        y: 0,
+        z: 0,
+        duration: 1.2,
+        ease: 'power2.inOut'
+      });
+    };
+
+    // Viewport Raycasting Click Listener
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+
+    const handleViewportClick = (event) => {
+      // Only process when HUD slide is visible and modal is closed
+      if (!hudRef.current) return;
+      const hudStyle = window.getComputedStyle(hudRef.current);
+      if (parseFloat(hudStyle.opacity) < 0.5) return;
+      if (showLeadModal) return;
+
+      // Skip if clicked on UI elements
+      if (
+        event.target.tagName === 'BUTTON' ||
+        event.target.tagName === 'INPUT' ||
+        event.target.tagName === 'SELECT' ||
+        event.target.closest('.hud-spec-item')
+      ) return;
+
+      // Mouse normalized coordinates
+      mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+      mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+      raycaster.setFromCamera(mouse, camera);
+      const markerMeshes = markers.map(m => m.mesh);
+      const intersects = raycaster.intersectObjects(markerMeshes, true);
+
+      if (intersects.length > 0) {
+        const clickedMesh = intersects[0].object;
+        const hit = markers.find(m => m.mesh === clickedMesh || m.mesh.children.includes(clickedMesh));
+        if (hit) {
+          setActiveHotspot(hit.id);
+          triggerZoomRef.current(hit.id);
+        }
+      }
+    };
+
+    window.addEventListener('click', handleViewportClick);
 
     // Render loop
     let animationId;
     const animate = () => {
       animationId = requestAnimationFrame(animate);
       
-      // Floating wave animation (Water Drift)
-      const driftY = Math.sin(Date.now() * 0.001) * 0.05;
-      yachtSculpture.position.y = (isMob ? 0.35 : -0.05) + driftY;
+      // Floating wave animation (Water Drift & Tilt) - Paused during Zoom
+      const driftY = Math.sin(Date.now() * 0.001) * 0.04;
+      const driftRotY = Math.sin(Date.now() * 0.0008) * 0.02;
+      const driftRotX = Math.cos(Date.now() * 0.0006) * 0.01;
+      
+      if (!isZoomedRef.current) {
+        yachtSculpture.position.y = driftY;
+        yachtSculpture.rotation.y = driftRotY;
+        yachtSculpture.rotation.x = driftRotX;
+      } else {
+        // Reset/dampen drift when zoomed in so markers don't wobble away from connecting SVG lines
+        yachtSculpture.position.y = 0;
+        yachtSculpture.rotation.set(0, 0, 0);
+      }
       
       // Secondary independent rotations of orbits
       orbit1Mesh.rotation.z += 0.0015;
       orbit2Mesh.rotation.x += 0.002;
+
+      // Animate digital ocean grid waves
+      const timeVal = Date.now() * 0.001;
+      const gPosAttr = gridGeom.attributes.position;
+      for (let i = 0; i < gPosAttr.count; i++) {
+        const gx = gPosAttr.getX(i);
+        const gy = gPosAttr.getY(i);
+        // Calculate vertical swell height using sinusoidal interference patterns
+        const gz = Math.sin(gx * 0.9 + timeVal) * 0.12 + Math.cos(gy * 0.8 + timeVal * 1.1) * 0.08;
+        gPosAttr.setZ(i, gz);
+      }
+      gPosAttr.needsUpdate = true;
+
+      // Pulse background golden glow sprite
+      const glowPulse = 1.0 + Math.sin(Date.now() * 0.0006) * 0.06;
+      glowSprite.scale.set(4.5 * glowPulse, 4.5 * glowPulse, 1);
+      glowSprite.material.opacity = 0.65 + Math.sin(Date.now() * 0.0008) * 0.1;
+
+      // Pulse volumetric sunbeam opacity to simulate floating dust scattering
+      sunbeam.material.opacity = 0.045 + Math.sin(Date.now() * 0.0004) * 0.015;
 
       // Pulse markers
       markers.forEach(m => {
@@ -470,6 +940,31 @@ export default function CinematicScroller() {
         }
       });
       
+      // Animate particle drift with cinematic spiral winds
+      const positions = particleGeometry.attributes.position.array;
+      for (let i = 0; i < particleCount; i++) {
+        const heightY = positions[i * 3 + 1];
+        positions[i * 3] += particleSpeeds[i].x;
+        positions[i * 3 + 1] += particleSpeeds[i].y;
+        positions[i * 3 + 2] += particleSpeeds[i].z;
+
+        // Wind eddies (horizontal swirls relative to height)
+        positions[i * 3] += Math.sin(Date.now() * 0.0008 + heightY * 2.0 + particleSpeeds[i].phase) * 0.0025;
+        positions[i * 3 + 2] += Math.cos(Date.now() * 0.0008 + heightY * 2.0 + particleSpeeds[i].phase) * 0.0025;
+
+        // Reset particles out of bounds
+        if (positions[i * 3 + 1] > 3) {
+          positions[i * 3 + 1] = -3;
+          positions[i * 3] = (Math.random() - 0.5) * 8;
+          positions[i * 3 + 2] = (Math.random() - 0.5) * 6;
+        }
+      }
+      particleGeometry.attributes.position.needsUpdate = true;
+
+      // Rotate particle field based on scroll
+      particles.rotation.y = scrollProgressRef.current * Math.PI * 0.5;
+      
+      camera.lookAt(cameraTargetRef.current);
       renderer.render(scene, camera);
     };
     animate();
@@ -489,15 +984,105 @@ export default function CinematicScroller() {
     return () => {
       cancelAnimationFrame(animationId);
       window.removeEventListener('resize', handleResize);
+      window.removeEventListener('click', handleViewportClick);
       ScrollTrigger.getAll().forEach(t => t.kill());
+      trackSlideLeave(activeSlide);
+      // Ensure body overflow is restored
+      document.body.style.overflow = '';
     };
-  }, []);
+  }, [showLeadModal, hotspotRefs, svgLineRefs]);
 
   return (
-    <div 
-      ref={containerRef} 
-      style={{ position: 'relative', width: '100%', minHeight: '300vh' }}
-    >
+    <>
+      {/* Brand Header */}
+      <header className="cinematic-header">
+        <a href="#home" className="cinematic-header-logo" onClick={(e) => { e.preventDefault(); scrollToSection(0); }}>
+          YACHTMAX <span className="text-mono">EXPERIENCE SYSTEM</span>
+        </a>
+        <nav className="cinematic-header-nav">
+          <button 
+            onClick={() => scrollToSection(0)} 
+            className={`cinematic-header-nav-link ${activeSection === 'alliance' ? 'active' : ''}`}
+            style={{ background: 'transparent', border: 'none' }}
+          >
+            01 Aliança
+          </button>
+          <button 
+            onClick={() => scrollToSection(0.5)} 
+            className={`cinematic-header-nav-link ${activeSection === 'specs' ? 'active' : ''}`}
+            style={{ background: 'transparent', border: 'none' }}
+          >
+            02 Especificações
+          </button>
+          <button 
+            onClick={() => scrollToSection(1.0)} 
+            className={`cinematic-header-nav-link ${activeSection === 'contact' ? 'active' : ''}`}
+            style={{ background: 'transparent', border: 'none' }}
+          >
+            03 Contato
+          </button>
+          <span className="cinematic-header-badge">OKEAN • FERRETTI GROUP</span>
+        </nav>
+      </header>
+
+      {/* Sidebar Slide Tracker Indicator */}
+      <div className="sidebar-nav-container">
+        <button 
+          onClick={() => scrollToSection(0)} 
+          className={`sidebar-nav-dot-wrapper ${activeSection === 'alliance' ? 'active' : ''}`}
+        >
+          <span className="sidebar-nav-dot" />
+          <span className="sidebar-nav-label">01 ALIANÇA</span>
+        </button>
+        <div className="sidebar-nav-line">
+          <div 
+            className="sidebar-nav-line-progress" 
+            style={{ 
+              height: `${activeSection === 'alliance' ? 0 : activeSection === 'specs' ? 50 : 100}%` 
+            }} 
+          />
+        </div>
+        <button 
+          onClick={() => scrollToSection(0.5)} 
+          className={`sidebar-nav-dot-wrapper ${activeSection === 'specs' ? 'active' : ''}`}
+        >
+          <span className="sidebar-nav-dot" />
+          <span className="sidebar-nav-label">02 SPECS</span>
+        </button>
+        <div className="sidebar-nav-line">
+          <div 
+            className="sidebar-nav-line-progress" 
+            style={{ 
+              height: `${activeSection === 'alliance' ? 0 : activeSection === 'specs' ? 0 : 100}%` 
+            }} 
+          />
+        </div>
+        <button 
+          onClick={() => scrollToSection(1.0)} 
+          className={`sidebar-nav-dot-wrapper ${activeSection === 'contact' ? 'active' : ''}`}
+        >
+          <span className="sidebar-nav-dot" />
+          <span className="sidebar-nav-label">03 CONTATO</span>
+        </button>
+      </div>
+
+      {/* Scroll Down Prompt (Slide 1 Only) */}
+      <div 
+        className="scroll-prompt" 
+        style={{ 
+          opacity: activeSection === 'alliance' ? 0.8 : 0,
+          pointerEvents: 'none'
+        }}
+      >
+        <span className="scroll-prompt-text">Scroll para explorar</span>
+        <div className="scroll-prompt-line" />
+      </div>
+
+      <div 
+        ref={containerRef} 
+        style={{ position: 'relative', width: '100%', minHeight: '300vh' }}
+      >
+
       <style>{`
         @keyframes hud-pulse {
           0% { transform: scale(0.6); opacity: 1; }
@@ -596,6 +1181,22 @@ export default function CinematicScroller() {
           }}
         />
 
+        {/* Zoom UI Back Button */}
+        {isZoomed && (
+          <button 
+            className="zoom-back-btn"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (triggerZoomBackRef.current) {
+                triggerZoomBackRef.current();
+              }
+            }}
+            style={{ zIndex: 50 }}
+          >
+            ← Voltar
+          </button>
+        )}
+
         {/* Dynamic Connecting Lines for Anatomy HUD (Desktop Only) */}
         <svg
           style={{
@@ -642,6 +1243,9 @@ export default function CinematicScroller() {
               onClick={(e) => {
                 e.stopPropagation();
                 setActiveHotspot(item.id);
+                if (triggerZoomRef.current) {
+                  triggerZoomRef.current(item.id);
+                }
               }}
               style={{
                 position: 'absolute',
@@ -733,10 +1337,15 @@ export default function CinematicScroller() {
                       id={`hud-spec-target-${item.id}`}
                       className={`hud-spec-item ${activeHotspot === item.id ? 'active' : ''}`}
                       onMouseEnter={() => setActiveHotspot(item.id)}
+                      onClick={() => {
+                        if (triggerZoomRef.current) {
+                          triggerZoomRef.current(item.id);
+                        }
+                      }}
                       style={{ fontSize: '12px' }}
                     >
                       <div style={{ fontWeight: '600', color: activeHotspot === item.id ? 'var(--color-aurora-gold)' : 'var(--color-pearl-white)' }}>
-                        {item.title}
+                        <span className="hud-spec-tag">{item.label}</span> {item.title}
                       </div>
                       {activeHotspot === item.id && (
                         <div style={{ color: 'var(--color-sandstone)', fontSize: '11px', marginTop: '4px', lineHeight: '1.4' }}>
@@ -796,7 +1405,11 @@ export default function CinematicScroller() {
                   onClick={() => {
                     const idx = markersData.findIndex(m => m.id === activeHotspot);
                     const nextIdx = (idx + 1) % markersData.length;
-                    setActiveHotspot(markersData[nextIdx].id);
+                    const nextId = markersData[nextIdx].id;
+                    setActiveHotspot(nextId);
+                    if (triggerZoomRef.current) {
+                      triggerZoomRef.current(nextId);
+                    }
                   }}
                   style={{ padding: '8px 16px', fontSize: '11px', minHeight: '44px' }}
                 >
@@ -894,7 +1507,13 @@ export default function CinematicScroller() {
             <p style={{ color: 'var(--color-sandstone)', fontSize: isMobile ? '13px' : '15px', lineHeight: '1.7', marginBottom: '24px' }}>
               Não vendemos apenas barcos. Entregamos a engenharia do tempo e da liberdade. Com acesso exclusivo ao inventário premium e suporte de engenharia naval de ponta.
             </p>
-            <button className="btn-yachtmax" style={{ minHeight: isMobile ? '44px' : 'auto', padding: isMobile ? '8px 24px' : '16px 32px', fontSize: isMobile ? '12px' : '14px', pointerEvents: 'auto' }}>
+            <button 
+              className="btn-yachtmax" 
+              onClick={() => {
+                trackCTAClick('catalog_explore');
+              }}
+              style={{ minHeight: isMobile ? '44px' : 'auto', padding: isMobile ? '8px 24px' : '16px 32px', fontSize: isMobile ? '12px' : '14px', pointerEvents: 'auto' }}
+            >
               Explorar Catálogo
             </button>
           </div>
@@ -932,16 +1551,40 @@ export default function CinematicScroller() {
               Conecte-se com nossos conselheiros de luxo através da plataforma integrada <strong>LNX-Core</strong> e agende seu Sea Trial privado no maior estaleiro do Brasil.
             </p>
             <div style={{ display: 'flex', gap: '12px', flexDirection: isMobile ? 'column' : 'row', width: isMobile ? '100%' : 'auto', justifyContent: 'center' }}>
-              <button className="btn-yachtmax" style={{ background: 'var(--color-champagne-metal)', color: 'var(--color-midnight-ocean)', width: isMobile ? '100%' : 'auto', minHeight: isMobile ? '44px' : 'auto', pointerEvents: 'auto' }}>
+              <button 
+                className="btn-yachtmax" 
+                onClick={() => {
+                  trackCTAClick('broker_contact_click');
+                  setLeadModalType('broker');
+                  setShowLeadModal(true);
+                }}
+                style={{ background: 'var(--color-champagne-metal)', color: 'var(--color-midnight-ocean)', width: isMobile ? '100%' : 'auto', minHeight: isMobile ? '44px' : 'auto', pointerEvents: 'auto' }}
+              >
                 Falar com Broker
               </button>
-              <button className="btn-yachtmax" style={{ width: isMobile ? '100%' : 'auto', minHeight: isMobile ? '44px' : 'auto', pointerEvents: 'auto' }}>
+              <button 
+                className="btn-yachtmax" 
+                onClick={() => {
+                  trackCTAClick('cafe_reserve_click');
+                  setLeadModalType('cafe');
+                  setShowLeadModal(true);
+                }}
+                style={{ width: isMobile ? '100%' : 'auto', minHeight: isMobile ? '44px' : 'auto', pointerEvents: 'auto' }}
+              >
                 Agendar Café
               </button>
             </div>
           </div>
         </div>
       </div>
-    </div>
+
+      </div>
+
+      <LeadCaptureModal 
+        isOpen={showLeadModal} 
+        onClose={() => setShowLeadModal(false)} 
+        type={leadModalType}
+      />
+    </>
   );
 }
