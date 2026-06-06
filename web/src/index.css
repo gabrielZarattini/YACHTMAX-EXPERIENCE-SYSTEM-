@@ -165,3 +165,449 @@ h1, h2, h3, .font-editorial {
 ::-webkit-scrollbar-thumb:hover {
   background: var(--color-champagne-metal);
 }
+
+/* ==========================================================================
+   Lead Capture Modal & Zoom Interface Styles
+   ========================================================================== */
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { transform: translateY(30px) scale(0.95); opacity: 0; }
+  to { transform: translateY(0) scale(1); opacity: 1; }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes drawStroke {
+  to { stroke-dashoffset: 0; }
+}
+
+.lead-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(7, 17, 28, 0.85);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justifyContent: center;
+  z-index: 100;
+  padding: var(--space-2);
+  animation: fadeIn 0.4s var(--ease-water-drift) forwards;
+}
+
+.lead-modal-content {
+  width: 100%;
+  max-width: 480px;
+  padding: var(--space-4);
+  position: relative;
+  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.8);
+  border: 1px solid rgba(199, 169, 126, 0.3);
+  animation: slideUp 0.5s var(--ease-water-drift) forwards;
+}
+
+.lead-modal-close {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-3);
+  background: transparent;
+  border: none;
+  color: var(--color-sandstone);
+  font-size: 28px;
+  cursor: pointer;
+  line-height: 1;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justifyContent: center;
+  transition: all var(--duration-fast) ease;
+}
+
+.lead-modal-close:hover {
+  color: var(--color-pearl-white);
+  transform: rotate(90deg);
+}
+
+.lead-modal-input,
+.lead-modal-select {
+  width: 100%;
+  background: rgba(13, 34, 54, 0.6);
+  border: 1px solid rgba(199, 169, 126, 0.25);
+  border-radius: var(--radius-sharp);
+  padding: 12px 16px;
+  color: var(--color-pearl-white);
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  outline: none;
+  transition: all var(--duration-fast) ease;
+}
+
+.lead-modal-input::placeholder {
+  color: rgba(216, 204, 184, 0.4);
+}
+
+.lead-modal-input:focus,
+.lead-modal-select:focus {
+  border-color: var(--color-champagne-metal);
+  background: rgba(24, 52, 78, 0.6);
+  box-shadow: 0 0 10px rgba(199, 169, 126, 0.2);
+}
+
+.lead-modal-error {
+  color: #ff6b7a;
+  font-size: 11px;
+  display: block;
+  margin-top: 4px;
+  font-family: 'IBM Plex Mono', monospace;
+}
+
+/* Success State Animations */
+.lead-modal-success {
+  text-align: center;
+  padding: var(--space-3) 0 var(--space-1);
+}
+
+.lead-modal-check-wrapper {
+  display: flex;
+  justifyContent: center;
+  margin-bottom: var(--space-2);
+}
+
+.lead-check-circle {
+  stroke-dasharray: 215;
+  stroke-dashoffset: 215;
+  animation: drawStroke 0.8s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.lead-check-mark {
+  stroke-dasharray: 40;
+  stroke-dashoffset: 40;
+  animation: drawStroke 0.6s cubic-bezier(0.4, 0, 0.2, 1) 0.5s forwards;
+}
+
+/* Spinner Loader */
+.lead-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(7, 17, 28, 0.25);
+  border-top-color: var(--color-midnight-ocean);
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+  display: inline-block;
+}
+
+/* Zoom UI Back Button */
+.zoom-back-btn {
+  position: absolute;
+  top: 40px;
+  right: 40px;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  border-radius: var(--radius-infinite);
+  background: rgba(13, 34, 54, 0.65);
+  border: 1px solid rgba(199, 169, 126, 0.35);
+  color: var(--color-pearl-white);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  cursor: pointer;
+  pointer-events: auto;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+  transition: all var(--duration-normal) var(--ease-water-drift);
+}
+
+.zoom-back-btn:hover {
+  background: var(--color-champagne-metal);
+  color: var(--color-midnight-ocean);
+  border-color: var(--color-champagne-metal);
+  box-shadow: 0 0 15px rgba(199, 169, 126, 0.5);
+  transform: translateX(-4px);
+}
+
+@media (max-width: 767px) {
+  .zoom-back-btn {
+    top: 20px;
+    right: 20px;
+    padding: 8px 16px;
+    font-size: 11px;
+  }
+}
+
+/* ==========================================================================
+   Cinematic Visual Polish — Header, Nav, Indicators, Prompts, Glass Refinement
+   ========================================================================== */
+
+/* --- Cinematic Header --- */
+.cinematic-header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 72px;
+  background: rgba(7, 17, 28, 0.45);
+  backdrop-filter: blur(25px);
+  -webkit-backdrop-filter: blur(25px);
+  border-bottom: 0.5px solid rgba(199, 169, 126, 0.18);
+  z-index: 90;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 var(--space-4);
+  transition: all var(--duration-normal) ease;
+}
+
+.cinematic-header-logo {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 22px;
+  letter-spacing: 0.06em;
+  color: var(--color-pearl-white);
+  text-decoration: none;
+  font-weight: 400;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.cinematic-header-logo span {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  color: var(--color-aurora-gold);
+  background: rgba(199, 169, 126, 0.12);
+  padding: 2px 8px;
+  border-radius: var(--radius-sharp);
+  border: 1px solid rgba(199, 169, 126, 0.25);
+  font-weight: 500;
+}
+
+.cinematic-header-nav {
+  display: flex;
+  gap: var(--space-4);
+  align-items: center;
+}
+
+.cinematic-header-nav-link {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  color: var(--color-titanium-silver);
+  text-decoration: none;
+  text-transform: uppercase;
+  position: relative;
+  padding: 6px 0;
+  cursor: pointer;
+  transition: color var(--duration-fast) ease;
+}
+
+.cinematic-header-nav-link:hover,
+.cinematic-header-nav-link.active {
+  color: var(--color-aurora-gold);
+}
+
+.cinematic-header-nav-link::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 0;
+  height: 1px;
+  background-color: var(--color-aurora-gold);
+  transition: width var(--duration-normal) var(--ease-water-drift);
+}
+
+.cinematic-header-nav-link:hover::after,
+.cinematic-header-nav-link.active::after {
+  width: 100%;
+}
+
+.cinematic-header-badge {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  color: rgba(250, 248, 244, 0.5);
+  letter-spacing: 0.05em;
+  border-left: 1px solid rgba(255, 255, 255, 0.15);
+  padding-left: var(--space-2);
+}
+
+@media (max-width: 767px) {
+  .cinematic-header {
+    height: 60px;
+    padding: 0 var(--space-2);
+  }
+  .cinematic-header-logo {
+    font-size: 18px;
+    gap: 8px;
+  }
+  .cinematic-header-nav {
+    display: none; /* Hide links on mobile for clean minimalist interface */
+  }
+}
+
+/* --- Slide tracker (Sidebar Indicators) --- */
+.sidebar-nav-container {
+  position: fixed;
+  left: var(--space-4);
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 85;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  align-items: center;
+}
+
+.sidebar-nav-line {
+  width: 1px;
+  height: 60px;
+  background: rgba(255, 255, 255, 0.1);
+  position: relative;
+}
+
+.sidebar-nav-line-progress {
+  width: 100%;
+  height: 0%;
+  background: var(--color-champagne-metal);
+  position: absolute;
+  top: 0;
+  left: 0;
+  transition: height 0.3s ease;
+}
+
+.sidebar-nav-dot-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  background: transparent;
+  border: none;
+  color: inherit;
+  outline: none;
+}
+
+.sidebar-nav-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.25);
+  transition: all var(--duration-normal) ease;
+}
+
+.sidebar-nav-dot-wrapper:hover .sidebar-nav-dot,
+.sidebar-nav-dot-wrapper.active .sidebar-nav-dot {
+  background: var(--color-aurora-gold);
+  transform: scale(1.5);
+  box-shadow: 0 0 10px var(--color-aurora-gold);
+}
+
+.sidebar-nav-label {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.3);
+  transition: color var(--duration-normal) ease;
+  text-transform: uppercase;
+}
+
+.sidebar-nav-dot-wrapper:hover .sidebar-nav-label,
+.sidebar-nav-dot-wrapper.active .sidebar-nav-label {
+  color: var(--color-aurora-gold);
+}
+
+@media (max-width: 1023px) {
+  .sidebar-nav-container {
+    display: none; /* Hide sidebar indicator on mobile/tablet to avoid clutter */
+  }
+}
+
+/* --- Scroll Down Prompt (Slide 1) --- */
+.scroll-prompt {
+  position: absolute;
+  bottom: 40px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  opacity: 0.8;
+  pointer-events: none;
+  transition: opacity var(--duration-normal) ease;
+}
+
+.scroll-prompt-text {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.25em;
+  color: var(--color-titanium-silver);
+  text-transform: uppercase;
+}
+
+.scroll-prompt-line {
+  width: 1px;
+  height: 48px;
+  background: rgba(199, 169, 126, 0.2);
+  position: relative;
+  overflow: hidden;
+}
+
+.scroll-prompt-line::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 20px;
+  background: linear-gradient(to bottom, transparent, var(--color-aurora-gold), transparent);
+  animation: line-slide 2.2s cubic-bezier(0.25, 1, 0.5, 1) infinite;
+}
+
+@keyframes line-slide {
+  0% { top: -20px; }
+  100% { top: 48px; }
+}
+
+/* --- Glassmorphism 2.0 Border Refinement --- */
+.glass-panel {
+  border: 1px solid rgba(199, 169, 126, 0.28) !important;
+  box-shadow: 
+    0 30px 60px rgba(0, 0, 0, 0.75), 
+    0 0 50px rgba(199, 169, 126, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
+  border-radius: var(--radius-premium) !important;
+  background: rgba(7, 17, 28, 0.72) !important; /* Slightly darker midnight blue backdrop */
+}
+
+/* --- Tech Specs Grid Enhancements --- */
+.hud-spec-item {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.hud-spec-tag {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 8px;
+  letter-spacing: 0.1em;
+  color: var(--color-titanium-silver);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 1px 4px;
+  border-radius: 2px;
+  margin-right: 6px;
+  display: inline-block;
+  vertical-align: middle;
+}
+
