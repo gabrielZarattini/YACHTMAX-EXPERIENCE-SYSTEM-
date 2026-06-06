@@ -284,40 +284,57 @@ export default function CinematicScroller() {
       thickness: 0.3
     });
 
-    // A. Stylized Extruded Hull (Sleek aerodynamic shape)
-    const hullShape = new THREE.Shape();
-    hullShape.moveTo(0, 1.3);
-    hullShape.quadraticCurveTo(0.28, 0.4, 0.22, -1.2);
-    hullShape.lineTo(-0.22, -1.2);
-    hullShape.quadraticCurveTo(-0.28, 0.4, 0, 1.3);
-
-    const extrudeSettings = {
-      steps: 2,
-      depth: 0.16,
-      bevelEnabled: true,
-      bevelThickness: 0.04,
-      bevelSize: 0.03,
-      bevelSegments: 5
-    };
-
-    const hullGeometry = new THREE.ExtrudeGeometry(hullShape, extrudeSettings);
+    // A. Hydrodynamic Sculpted V-Hull (Streamlined Clipper Bow & Tapered Stern)
+    const hullLength = 2.4;
+    const hullGeometry = new THREE.CylinderGeometry(0.32, 0.1, hullLength, 32, 12, true, 0, Math.PI);
+    hullGeometry.rotateX(Math.PI / 2); // Orient horizontally along Z
+    hullGeometry.rotateZ(Math.PI); // Flip so the half-cylinder curves downwards
+    
+    // Taper vertices to shape the hull organic lines
+    const hullPos = hullGeometry.attributes.position;
+    for (let i = 0; i < hullPos.count; i++) {
+      let x = hullPos.getX(i);
+      let y = hullPos.getY(i);
+      let z = hullPos.getZ(i); // length range: -hullLength/2 to +hullLength/2
+      
+      const relDist = (z + hullLength / 2) / hullLength; // 0 at stern, 1 at bow
+      
+      if (z > 0) {
+        // taper to sharp bow
+        const bowFactor = z / (hullLength / 2); // 0 to 1
+        x *= (1.0 - bowFactor * 0.94);
+        y *= (1.0 - bowFactor * 0.32); // bow rises slightly
+      } else {
+        // taper stern slightly
+        const sternFactor = -z / (hullLength / 2); // 0 to 1
+        x *= (1.0 - sternFactor * 0.16);
+      }
+      
+      hullPos.setX(i, x);
+      hullPos.setY(i, y);
+    }
+    hullGeometry.computeVertexNormals();
     const hullMesh = new THREE.Mesh(hullGeometry, goldMaterial);
-    hullMesh.rotation.x = Math.PI / 2; // Lie flat
-    hullMesh.position.y = -0.15;
+    hullMesh.position.y = -0.16;
     yachtSculpture.add(hullMesh);
 
     // A.1 Teak/Carbon Deck Plate
-    const deckPlateShape = new THREE.Shape();
-    deckPlateShape.moveTo(0, 1.25);
-    deckPlateShape.quadraticCurveTo(0.26, 0.38, 0.21, -1.15);
-    deckPlateShape.lineTo(-0.21, -1.15);
-    deckPlateShape.quadraticCurveTo(-0.26, 0.38, 0, 1.25);
+    const deckShape = new THREE.Shape();
+    deckShape.moveTo(0, hullLength / 2);
+    deckShape.quadraticCurveTo(0.32, hullLength / 8, 0.28, -hullLength / 2);
+    deckShape.lineTo(-0.28, -hullLength / 2);
+    deckShape.quadraticCurveTo(-0.32, hullLength / 8, 0, hullLength / 2);
 
-    const deckPlateGeo = new THREE.ExtrudeGeometry(deckPlateShape, {
+    const deckPlateGeo = new THREE.ExtrudeGeometry(deckShape, {
       steps: 1,
       depth: 0.015,
-      bevelEnabled: false
+      bevelEnabled: true,
+      bevelThickness: 0.005,
+      bevelSize: 0.005,
+      bevelSegments: 3
     });
+    deckPlateGeo.rotateX(Math.PI / 2);
+    
     const deckPlateMat = new THREE.MeshPhysicalMaterial({
       color: 0x1a1a1a, // Dark slate teak/carbon
       roughness: 0.65,
@@ -325,94 +342,207 @@ export default function CinematicScroller() {
       clearcoat: 0.1
     });
     const deckPlate = new THREE.Mesh(deckPlateGeo, deckPlateMat);
-    deckPlate.rotation.x = Math.PI / 2;
-    deckPlate.position.y = 0.02; // slightly above hull top
+    deckPlate.position.y = 0.005; // sits flush on top of hull
     yachtSculpture.add(deckPlate);
 
-    // A.2 Symmetrical Side Railings (Chrome rods along deck edge)
-    const railingGeo = new THREE.CylinderGeometry(0.005, 0.005, 1.9, 8);
-    const leftRailing = new THREE.Mesh(railingGeo, chromeMaterial);
-    leftRailing.position.set(-0.22, 0.04, 0.05);
-    leftRailing.rotation.x = Math.PI / 2;
-    yachtSculpture.add(leftRailing);
+    // A.2 Symmetrical Side Railings with Vertical Support Stanchions (Luxury detail)
+    const railingGroup = new THREE.Group();
+    yachtSculpture.add(railingGroup);
 
-    const rightRailing = new THREE.Mesh(railingGeo, chromeMaterial);
-    rightRailing.position.set(0.22, 0.04, 0.05);
-    rightRailing.rotation.x = Math.PI / 2;
-    yachtSculpture.add(rightRailing);
+    const numStanchions = 6;
+    const stanchionHeight = 0.06;
+    const stanchionGeo = new THREE.CylinderGeometry(0.003, 0.003, stanchionHeight, 8);
+    
+    // Left Stanchions
+    for (let i = 0; i < numStanchions; i++) {
+      const zPos = -0.7 + (i / (numStanchions - 1)) * 1.5; // spaced along deck
+      const xPos = -0.24 + Math.sin((zPos + hullLength/2)/hullLength * Math.PI) * 0.06; // follow deck outline
+      const stanchion = new THREE.Mesh(stanchionGeo, chromeMaterial);
+      stanchion.position.set(xPos, 0.035, zPos);
+      railingGroup.add(stanchion);
+    }
+    
+    // Right Stanchions
+    for (let i = 0; i < numStanchions; i++) {
+      const zPos = -0.7 + (i / (numStanchions - 1)) * 1.5;
+      const xPos = 0.24 - Math.sin((zPos + hullLength/2)/hullLength * Math.PI) * 0.06;
+      const stanchion = new THREE.Mesh(stanchionGeo, chromeMaterial);
+      stanchion.position.set(xPos, 0.035, zPos);
+      railingGroup.add(stanchion);
+    }
 
-    // A.3 Tilted Mast & Radar Dome (Stern popa)
-    const mastGeo = new THREE.CylinderGeometry(0.008, 0.014, 0.35, 8);
-    const mastMesh = new THREE.Mesh(mastGeo, chromeMaterial);
-    mastMesh.position.set(0, 0.12, -0.85);
-    mastMesh.rotation.x = -Math.PI / 6; // tilted back
-    yachtSculpture.add(mastMesh);
+    // Longitudinal top rails
+    const railWireGeo = new THREE.CylinderGeometry(0.004, 0.004, 1.5, 8);
+    
+    const leftRailWire = new THREE.Mesh(railWireGeo, chromeMaterial);
+    leftRailWire.position.set(-0.23, 0.065, 0.05);
+    leftRailWire.rotation.x = Math.PI / 2;
+    railingGroup.add(leftRailWire);
 
-    const domeGeo = new THREE.CylinderGeometry(0.05, 0.05, 0.025, 16);
-    const domeMesh = new THREE.Mesh(domeGeo, carbonMaterial);
-    domeMesh.position.set(0, 0.28, -0.92);
-    yachtSculpture.add(domeMesh);
+    const rightRailWire = new THREE.Mesh(railWireGeo, chromeMaterial);
+    rightRailWire.position.set(0.23, 0.065, 0.05);
+    rightRailWire.rotation.x = Math.PI / 2;
+    railingGroup.add(rightRailWire);
 
-    // B. Balconies (Fold-out side platforms - signature OKEAN design)
+    // B. Balconies (Signature OKEAN fold-out decks with teak insert)
     const balconyGeo = new THREE.BoxGeometry(0.12, 0.02, 0.45);
     
     // Right balcony
     const rightBalcony = new THREE.Mesh(balconyGeo, goldMaterial);
     rightBalcony.position.set(0.25, -0.05, -0.7);
-    rightBalcony.rotation.y = -Math.PI / 16; // Rotated slightly out
+    rightBalcony.rotation.y = -Math.PI / 16;
     yachtSculpture.add(rightBalcony);
+
+    const rightBalconyTeak = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.005, 0.43), deckPlateMat);
+    rightBalconyTeak.position.y = 0.012;
+    rightBalcony.add(rightBalconyTeak);
     
     // Left balcony
     const leftBalcony = new THREE.Mesh(balconyGeo, goldMaterial);
     leftBalcony.position.set(-0.25, -0.05, -0.7);
-    leftBalcony.rotation.y = Math.PI / 16; // Rotated slightly out
+    leftBalcony.rotation.y = Math.PI / 16;
     yachtSculpture.add(leftBalcony);
 
-    // C. Deck & Cabin Structure
-    const cabinShape = new THREE.Shape();
-    cabinShape.moveTo(0, 0.5);
-    cabinShape.lineTo(0.13, -0.5);
-    cabinShape.lineTo(-0.13, -0.5);
-    cabinShape.closePath();
+    const leftBalconyTeak = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.005, 0.43), deckPlateMat);
+    leftBalconyTeak.position.y = 0.012;
+    leftBalcony.add(leftBalconyTeak);
 
-    const cabinGeometry = new THREE.ExtrudeGeometry(cabinShape, {
-      steps: 1,
-      depth: 0.12,
-      bevelEnabled: true,
-      bevelThickness: 0.03,
-      bevelSize: 0.02,
-      bevelSegments: 3
-    });
+    // C. Streamlined Aerodynamic Superstructure (Cabin dome)
+    const cabinLength = 1.25;
+    const cabinGeometry = new THREE.SphereGeometry(0.38, 32, 24, 0, Math.PI * 2, 0, Math.PI / 2);
+    cabinGeometry.scale(0.65, 0.45, cabinLength / 0.76); // stretch sphere to boat deckhouse dome
+    
+    // Warp cabin to slope windshield forward and taper rear elegantly
+    const cabinPos = cabinGeometry.attributes.position;
+    for (let i = 0; i < cabinPos.count; i++) {
+      let x = cabinPos.getX(i);
+      let y = cabinPos.getY(i);
+      let z = cabinPos.getZ(i);
+      
+      if (z > 0) {
+        const factor = z / cabinLength;
+        y *= (1.0 - factor * 0.65); // slope windshield
+        x *= (1.0 - factor * 0.32); // taper width
+      } else {
+        const factor = -z / cabinLength;
+        y *= (1.0 - factor * 0.42); // slope sternward
+        x *= (1.0 - factor * 0.28);
+      }
+      cabinPos.setX(i, x);
+      cabinPos.setY(i, y);
+    }
+    cabinGeometry.computeVertexNormals();
     const cabinMesh = new THREE.Mesh(cabinGeometry, chromeMaterial);
-    cabinMesh.rotation.x = Math.PI / 2;
-    cabinMesh.position.set(0, 0.06, 0.15);
+    cabinMesh.position.set(0, 0.012, 0.05); // Sits flush on deck plate
     yachtSculpture.add(cabinMesh);
 
-    // D. Flybridge Hardtop (Carbon style)
-    const hardtopGeo = new THREE.BoxGeometry(0.18, 0.02, 0.5);
-    const hardtopMesh = new THREE.Mesh(hardtopGeo, carbonMaterial);
-    hardtopMesh.position.set(0, 0.28, -0.1);
+    // C.1 Seamless Wrapped Windshield & Windows (Glass layer overlay)
+    const windowGeometry = new THREE.SphereGeometry(0.385, 32, 24, 0, Math.PI * 2, 0.22, 0.26); // band slice
+    windowGeometry.scale(0.66, 0.46, cabinLength / 0.76);
+    
+    const windowPos = windowGeometry.attributes.position;
+    for (let i = 0; i < windowPos.count; i++) {
+      let x = windowPos.getX(i);
+      let y = windowPos.getY(i);
+      let z = windowPos.getZ(i);
+      if (z > 0) {
+        const factor = z / cabinLength;
+        y *= (1.0 - factor * 0.65);
+        x *= (1.0 - factor * 0.32);
+      } else {
+        const factor = -z / cabinLength;
+        y *= (1.0 - factor * 0.42);
+        x *= (1.0 - factor * 0.28);
+      }
+      windowPos.setX(i, x);
+      windowPos.setY(i, y);
+    }
+    windowGeometry.computeVertexNormals();
+    const windowMesh = new THREE.Mesh(windowGeometry, glassMaterial);
+    windowMesh.position.set(0, 0.012, 0.05);
+    yachtSculpture.add(windowMesh);
+
+    // D. Flybridge Hardtop (Wing-style spoiler with struts)
+    const hardtopGeometry = new THREE.BoxGeometry(0.24, 0.02, 0.58);
+    const htPos = hardtopGeometry.attributes.position;
+    for (let i = 0; i < htPos.count; i++) {
+      let x = htPos.getX(i);
+      let y = htPos.getY(i);
+      let z = htPos.getZ(i);
+      const factor = (z + 0.29) / 0.58;
+      if (z > 0) {
+        x *= (0.45 + 0.55 * (1 - factor)); // taper front tip
+      }
+      if (z < 0) {
+        y += z * 0.06; // tilt down at rear spoiler
+      }
+      htPos.setX(i, x);
+      htPos.setY(i, y);
+    }
+    hardtopGeometry.computeVertexNormals();
+    const hardtopMesh = new THREE.Mesh(hardtopGeometry, carbonMaterial);
+    hardtopMesh.position.set(0, 0.22, -0.1);
     yachtSculpture.add(hardtopMesh);
 
-    // E. Windshield Glass
-    const windshieldGeo = new THREE.BoxGeometry(0.2, 0.12, 0.3);
-    const windshieldMesh = new THREE.Mesh(windshieldGeo, glassMaterial);
-    windshieldMesh.position.set(0, 0.18, 0.35);
-    windshieldMesh.rotation.x = -Math.PI / 6; // slanted forward
-    yachtSculpture.add(windshieldMesh);
+    // Hardtop struts (connecting hardtop to deck house)
+    const strutGeo = new THREE.CylinderGeometry(0.005, 0.008, 0.16, 8);
+    const leftStrut = new THREE.Mesh(strutGeo, chromeMaterial);
+    leftStrut.position.set(-0.09, 0.13, -0.15);
+    leftStrut.rotation.z = Math.PI / 16;
+    yachtSculpture.add(leftStrut);
 
-    // F. Symmetrical Propulsion Jet Pipes (Stern)
-    const jetGeo = new THREE.CylinderGeometry(0.025, 0.025, 0.1, 16);
-    
-    const leftJet = new THREE.Mesh(jetGeo, chromeMaterial);
-    leftJet.position.set(-0.1, -0.1, -1.25);
-    leftJet.rotation.x = Math.PI / 2;
-    yachtSculpture.add(leftJet);
+    const rightStrut = new THREE.Mesh(strutGeo, chromeMaterial);
+    rightStrut.position.set(0.09, 0.13, -0.15);
+    rightStrut.rotation.z = -Math.PI / 16;
+    yachtSculpture.add(rightStrut);
 
-    const rightJet = new THREE.Mesh(jetGeo, chromeMaterial);
-    rightJet.position.set(0.1, -0.1, -1.25);
-    rightJet.rotation.x = Math.PI / 2;
-    yachtSculpture.add(rightJet);
+    // E. Riva-style Stern A-Frame Radar Arch
+    const archGeo = new THREE.CylinderGeometry(0.006, 0.012, 0.25, 8);
+    const leftArch = new THREE.Mesh(archGeo, carbonMaterial);
+    leftArch.position.set(-0.13, 0.11, -0.62);
+    leftArch.rotation.z = -Math.PI / 12;
+    leftArch.rotation.x = -Math.PI / 8; // tilted back
+    yachtSculpture.add(leftArch);
+
+    const rightArch = new THREE.Mesh(archGeo, carbonMaterial);
+    rightArch.position.set(0.13, 0.11, -0.62);
+    rightArch.rotation.z = Math.PI / 12;
+    rightArch.rotation.x = -Math.PI / 8;
+    yachtSculpture.add(rightArch);
+
+    const crossbarGeo = new THREE.CylinderGeometry(0.006, 0.006, 0.26, 8);
+    const crossbar = new THREE.Mesh(crossbarGeo, carbonMaterial);
+    crossbar.position.set(0, 0.20, -0.65);
+    crossbar.rotation.z = Math.PI / 2;
+    yachtSculpture.add(crossbar);
+
+    const domeGeo = new THREE.CylinderGeometry(0.055, 0.055, 0.025, 16);
+    const domeMesh = new THREE.Mesh(domeGeo, chromeMaterial);
+    domeMesh.position.set(0, 0.22, -0.65);
+    yachtSculpture.add(domeMesh);
+
+    // F. Stern Propulsion Shafts & Torus Blade Propellers (Sleek mechanical detail)
+    const shaftGeo = new THREE.CylinderGeometry(0.006, 0.006, 0.18, 8);
+    const leftShaft = new THREE.Mesh(shaftGeo, chromeMaterial);
+    leftShaft.position.set(-0.1, -0.16, -1.0);
+    leftShaft.rotation.x = Math.PI / 6; // angled down
+    yachtSculpture.add(leftShaft);
+
+    const rightShaft = new THREE.Mesh(shaftGeo, chromeMaterial);
+    rightShaft.position.set(0.1, -0.16, -1.0);
+    rightShaft.rotation.x = Math.PI / 6;
+    yachtSculpture.add(rightShaft);
+
+    const propGeo = new THREE.TorusGeometry(0.045, 0.012, 8, 3);
+    const leftProp = new THREE.Mesh(propGeo, goldMaterial);
+    leftProp.position.set(-0.1, -0.21, -1.1);
+    leftProp.rotation.y = Math.PI / 4;
+    yachtSculpture.add(leftProp);
+
+    const rightProp = new THREE.Mesh(propGeo, goldMaterial);
+    rightProp.position.set(0.1, -0.21, -1.1);
+    rightProp.rotation.y = -Math.PI / 4;
+    yachtSculpture.add(rightProp);
 
     // G. Concentric Navigation Orbits
     const orbit1Geometry = new THREE.TorusGeometry(1.6, 0.015, 16, 100);
