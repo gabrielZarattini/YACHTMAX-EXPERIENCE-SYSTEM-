@@ -31,10 +31,15 @@
 
 ### [Sessão 06/06/2026 — Sprint 2 Sealing]
 *   **Ação:** Implementação de captação de leads, analytics engine local, zoom dinâmico na HUD 3D, setup de refletores PMREM e criação do Agent 09.
+*   **Handoff Hash:** `cc44320`
+
+### [Sessão 06/06/2026 — Sprint 2.5 (Cinematic Visual Polish)]
+*   **Ação:** Refinamento estético completo da 3D yacht sculpture (V-hull, dome cabin, radar arch, propeller blades e stanchions) e acréscimo de widgets de navegação fixa (Header, Slide Tracker Sidebar, Scroll prompts).
 *   **Commits Granulares:**
 
 | Hash | Camada | Descrição |
 |:-----|:-------|:----------|
+| `de5b095` | feat(cinematic) | Sculpt refined V-hull yacht geometry and add clean visual elements (Header, Sidebar progress, Scroll prompts) |
 | `d8428f3` | feat(crm-analytics) | Analytics Engine local com Desire Score™ e mock de persistência LNX-Core CRM |
 | `db1b0f3` | feat(ui-seo) | Modal glassmorphism LeadCaptureModal, index.css styling e meta-tags SEO completas |
 | `f913a20` | feat(scroll-teller) | CinematicScroller com environment mapping PMREM, click-to-zoom interativo e JSX camelCase fix |
@@ -59,9 +64,10 @@
 ---
 
 ## 🚀 PRÓXIMOS PASSOS (BACKLOG ESTADO GASOSO)
-1. Integrar suporte a Realidade Aumentada (AR) usando WebXR.
-2. Criar painel administrativo local simples `/admin` para listar os leads capturados do localStorage via `listLeads()`.
-3. Desenvolver testes unitários para a validação de formulários de Lead e cálculo matemático de Desire Score™.
+1. **Transição para Photo-Teller de Alta Fidelidade (Option B)**: Substituir o Three.js por uma interface editorial limpa e sofisticada, exibindo a foto real do iate com zooms suaves via GSAP focando nos hotspots (Beach club, Proa, Cabine, etc.), removendo toda poluição de "CAD/Radar".
+2. Integrar suporte a Realidade Aumentada (AR) usando WebXR.
+3. Criar painel administrativo local simples `/admin` para listar os leads capturados do localStorage via `listLeads()`.
+4. Desenvolver testes unitários para a validação de formulários de Lead e cálculo matemático de Desire Score™.
 
 ---
 
